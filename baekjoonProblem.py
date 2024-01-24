@@ -4,7 +4,6 @@ import csv
 from tqdm import tqdm
 
 def clean_text(text):
-    text = text.replace('\n', ' ')  # 줄바꿈 문자를 공백으로 대체
     text = text.replace('\\', '\\\\')  # 역슬래시 이스케이프 처리
     text = text.replace('"', '""')  # 큰따옴표 이스케이프 처리
     return f'"{text}"'
@@ -21,24 +20,36 @@ def crawl_problem(problem_number):
     description = soup.find('div', id='problem_description')
     input_description = soup.find('div', id='problem_input').text.strip() if soup.find('div', id='problem_input') else "N/A"
     output_description = soup.find('div', id='problem_output').text.strip() if soup.find('div', id='problem_output') else "N/A"
-    sample_input = soup.find('pre', id='sample-input-1').text.strip() if soup.find('pre', id='sample-input-1') else "N/A"
-    sample_output = soup.find('pre', id='sample-output-1').text.strip() if soup.find('pre', id='sample-output-1') else "N/A"
 
     if description:
-        html_content = str(description)  # HTML 내용을 문자열로 변환
-        images = description.find_all('img')
+        if description:
+            images = description.find_all('img')
         for img in images:
+            # Extract the image URL and replace the image tag with the image URL in the description text
             image_url = img.get('src')
-            img_html = str(img)
-            html_content = html_content.replace(img_html, image_url)  # 이미지 태그를 URL로 대체
-        description = BeautifulSoup(html_content, 'html.parser').get_text(separator=' ', strip=True)
+            img.replace_with(image_url)
+
+        description_texts = []
+        for element in description.contents:
+            text = ''
+            if element.name == 'p':
+                text = element.get_text(separator=' ', strip=True)
+            elif element.name == 'pre':
+                text = element.get_text(separator='\n', strip=True)
+            else:
+                continue
+            description_texts.append(text)
+        description_text = '\n'.join(description_texts).strip()
     else:
-        description = "N/A"
+        description_text = "N/A"
+
+    sample_input = soup.find('pre', id='sample-input-1').get_text(separator='\n').strip() if soup.find('pre', id='sample-input-1') else "N/A"
+    sample_output = soup.find('pre', id='sample-output-1').get_text(separator='\n').strip() if soup.find('pre', id='sample-output-1') else "N/A"
 
     return {
         "ID": problem_number,
         "Title": clean_text(title),
-        "Description": clean_text(description),
+        "Description": clean_text(description_text),
         "Input Description": clean_text(input_description),
         "Output Description": clean_text(output_description),
         "Sample Input": clean_text(sample_input),
@@ -47,7 +58,7 @@ def crawl_problem(problem_number):
 
 def save_to_csv(data, filename):
     with open(filename, 'w', newline='', encoding='utf-8') as file:
-        writer = csv.DictWriter(file, fieldnames=["ID", "Title", "Description", "Images with Descriptions", "Input Description", "Output Description", "Sample Input", "Sample Output"])
+        writer = csv.DictWriter(file, fieldnames=["ID", "Title", "Description", "Input Description", "Output Description", "Sample Input", "Sample Output"])
         writer.writeheader()
         for row in data:
             writer.writerow(row)
